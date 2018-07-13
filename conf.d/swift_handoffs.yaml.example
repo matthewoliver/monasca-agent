@@ -1,0 +1,20 @@
+init_config:
+  collect_period: 300
+
+instances:
+    - name: policy_0 ring
+      ring: /etc/swift/object.ring.gz
+      devices: /srv/node
+      granularity: server
+    - name: policy_1 ring
+      ring: /etc/swift/object_1.ring.gz
+      devices: /srv/node
+      granularity: server
+    - name: account ring
+      ring: /etc/swift/account.ring.gz
+      devices: /srv/node
+      granularity: server
+    - name: container ring
+      ring: /etc/swift/container.ring.gz
+      devices: /srv/node
+      granularity: server
