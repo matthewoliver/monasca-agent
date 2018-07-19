@@ -259,14 +259,16 @@ class SwiftRecon(checks.AgentCheck):
         if not server_type:
             self.log.warning('Missing server_type, so will only attempt '
                              'common checks')
+            server_type = ''
+        if not instance.get('hostname'):
+            self.log.error('Missing hostname')
             return None
         if not instance.get('port'):
             self.log.error('Missing port')
             return None
         if server_type.upper() not in ('ACCOUNT', 'CONTAINER', 'OBJECT'):
-            self.log.error('instance name needs to end in either account, '
-                           'container or object')
-            return None
+            self.log.warning('server_type name needs to be either account, '
+                             'container or object')
 
         if server_type == 'object':
             self.async_check(instance)
@@ -278,7 +280,9 @@ class SwiftRecon(checks.AgentCheck):
             self.updater_check(instance, server_type)
         elif server_type == 'account':
             self.auditor_check(instance, server_type)
-        self.replication_check(instance, server_type)
+
+        if server_type:
+            self.replication_check(instance, server_type)
         self.umount_check(instance)
         self.disk_usage(instance)
 
