@@ -1,8 +1,8 @@
 import json
 import os
 import six
-import socket
 from six.moves import urllib
+import socket
 
 import monasca_agent.collector.checks as checks
 
@@ -22,8 +22,7 @@ class SwiftReconException(Exception):
 class SwiftRecon(checks.AgentCheck):
 
     def scout_host(self, base_url, recon_type, timeout=5):
-        """
-        Perform the actual HTTP request to obtain swift recon telemetry.
+        """Perform the actual HTTP request to obtain swift recon telemetry.
 
         :param base_url: the base url of the host you wish to check. str of the
                         format 'http://127.0.0.1:6200/recon/'
@@ -107,14 +106,10 @@ class SwiftRecon(checks.AgentCheck):
         if content is None:
             return None
 
-        for stat, is_date in (('object_expiration_pass', False),
-                              ('expired_last_pass', False)):
+        for stat in ('object_expiration_pass', 'expired_last_pass'):
             if stat not in content or content[stat] is None:
                 continue
-            if is_date:
-                data = to_grafana_date(content[stat])
-            else:
-                data = content[stat]
+            data = content[stat]
             self.gauge(
                 'swift_recon.object.expirer.{0}'.format(stat),
                 data, dimensions)
@@ -165,7 +160,8 @@ class SwiftRecon(checks.AgentCheck):
             if stat not in content['replication_stats'] or \
                     content['replication_stats'][stat] is None:
                 continue
-            self.gauge('swift_recon.{0}.{1}'.format(server_type, stat),
+            self.gauge('swift_recon.{0}.replication.{1}'.format(server_type,
+                                                                stat),
                        content['replication_stats'][stat], dimensions)
 
     def umount_check(self, instance):

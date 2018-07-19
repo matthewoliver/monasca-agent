@@ -306,22 +306,286 @@ class SwiftReconTest(unittest.TestCase):
                             {'account', 'container', 'object'})
 
     def test_driveaudit_check(self):
-        pass
+        instance = {'server_type': 'object', 'hostname': 'awesome.host',
+                    'port': 1234}
+
+        # test that the error case doesn't call gauge
+        self._test_scout_error_no_gauge(self.swiftrecon.driveaudit_check,
+                                        instance)
+
+        # now check the correct case
+        expected_url = self.swiftrecon._build_base_url(instance)
+
+        self.swiftrecon.scout_returns = [
+            (expected_url, {"drive_audit_errors": 5}, 200),
+            (expected_url, {"drive_audit_errors": None}, 200)]
+
+        self.swiftrecon.driveaudit_check(instance)
+        self.assertTrue(self.swiftrecon.gauge_called)
+        self.assertIn('swift_recon.drive_audit_errors',
+                      self.swiftrecon.gauge_calls)
+        self.assertListEqual(
+            self.swiftrecon.gauge_calls['swift_recon.drive_audit_errors'], [5])
+
+        # If the result it None the gauge wont be called
+        self.swiftrecon.reset_gauge()
+        self.swiftrecon.driveaudit_check(instance)
+        self.assertFalse(self.swiftrecon.gauge_called)
 
     def test_async_check(self):
-        pass
+        instance = {'server_type': 'object', 'hostname': 'awesome.host',
+                    'port': 1234}
+
+        # test that the error case doesn't call gauge
+        self._test_scout_error_no_gauge(self.swiftrecon.async_check,
+                                        instance)
+
+        # now check the correct case
+        expected_url = self.swiftrecon._build_base_url(instance)
+
+        self.swiftrecon.scout_returns = [
+            (expected_url, {"async_pending": 12}, 200),
+            (expected_url, {"async_pending": None}, 200)]
+
+        self.swiftrecon.async_check(instance)
+        self.assertTrue(self.swiftrecon.gauge_called)
+        self.assertIn('swift_recon.object.async_pending',
+                      self.swiftrecon.gauge_calls)
+        self.assertListEqual(
+            self.swiftrecon.gauge_calls['swift_recon.object.async_pending'],
+            [12])
+
+        # If the result it None the gauge wont be called
+        self.swiftrecon.reset_gauge()
+        self.swiftrecon.async_check(instance)
+        self.assertFalse(self.swiftrecon.gauge_called)
 
     def test_object_auditor_check(self):
-        pass
+        instance = {'server_type': 'object', 'hostname': 'awesome.host',
+                    'port': 1234}
+
+        # test that the error case doesn't call gauge
+        self._test_scout_error_no_gauge(self.swiftrecon.object_auditor_check,
+                                        instance)
+
+        # now check the correct case
+        expected_url = self.swiftrecon._build_base_url(instance)
+        scout_content = {
+            "object_auditor_stats_ALL": {
+                "passes": 5,
+                "errors": 1,
+                "audit_time": 4,
+                "start_time": 1531724606.053309,
+                "quarantined": 2,
+                "bytes_processed": 11885},
+            "object_auditor_stats_ZBF": {
+                "passes": 3,
+                "errors": 0,
+                "audit_time": 0,
+                "start_time": 1531724665.303363,
+                "quarantined": 0,
+                "bytes_processed": 0}}
+
+        self.swiftrecon.scout_returns = [
+            (expected_url, scout_content, 200)]
+
+        self.swiftrecon.object_auditor_check(instance)
+        self.assertTrue(self.swiftrecon.gauge_called)
+
+        prefix = 'swift_recon.object.auditor.{}'
+        scout_key = 'object_auditor_stats_{}'
+        for frag in ('ALL', 'ZBF'):
+            scout_metric = scout_key.format(frag)
+            metric = prefix.format(scout_metric)
+            for key in scout_content[scout_metric]:
+                self.assertIn('{}.{}'.format(metric, key),
+                              self.swiftrecon.gauge_calls)
+                if key == 'start_time':
+                    # there is a hack to make epochs dates in grafana and that
+                    # is to time it by 1000
+                    scout_content[scout_metric][key] = \
+                        scout_content[scout_metric][key] * 1000
+                self.assertListEqual(
+                    self.swiftrecon.gauge_calls['{}.{}'.format(metric, key)],
+                    [scout_content[scout_metric][key]])
 
     def test_updater_check(self):
-        pass
+        instance = {'server_type': 'object', 'hostname': 'awesome.host',
+                    'port': 1234}
+
+        # test that the error case doesn't call gauge
+        for server_type in ('object', 'container'):
+            self._test_scout_error_no_gauge(self.swiftrecon.updater_check,
+                                            instance, server_type)
+
+        # now check the correct case
+        expected_url = self.swiftrecon._build_base_url(instance)
+
+        self.swiftrecon.scout_returns = [
+            (expected_url, {"object_updater_sweep":
+                            0.10095596313476562}, 200),
+            (expected_url,{"container_updater_sweep":
+                           0.11764812469482422} , 200)]
+
+        metric = 'swift_recon.{0}.{0}_updater_sweep'
+
+        self.swiftrecon.updater_check(instance, 'object')
+        self.assertTrue(self.swiftrecon.gauge_called)
+        self.assertIn(metric.format('object'), self.swiftrecon.gauge_calls)
+        self.assertListEqual(
+            self.swiftrecon.gauge_calls[metric.format('object')],
+            [0.10095596313476562])
+        self.swiftrecon.reset_gauge()
+
+        instance = {'server_type': 'container', 'hostname': 'awesome.host',
+                    'port': 1234}
+        self.swiftrecon.updater_check(instance, 'container')
+        self.assertTrue(self.swiftrecon.gauge_called)
+        self.assertIn(metric.format('container'), self.swiftrecon.gauge_calls)
+        self.assertListEqual(
+            self.swiftrecon.gauge_calls[metric.format('container')],
+            [0.11764812469482422])
 
     def test_expirer_check(self):
-        pass
+        instance = {'server_type': 'object', 'hostname': 'awesome.host',
+                    'port': 1234}
+
+        # test that the error case doesn't call gauge
+        for server_type in ('object', 'container'):
+            self._test_scout_error_no_gauge(self.swiftrecon.updater_check,
+                                            instance, server_type)
+
+        # now check the correct case
+        expected_url = self.swiftrecon._build_base_url(instance)
+        scout_content = {"object_expiration_pass": 0.021467924118041992,
+                         "expired_last_pass": 5}
+
+        self.swiftrecon.scout_returns = [
+            (expected_url, scout_content, 200)]
+
+        metric = 'swift_recon.object.expirer.{}'
+
+        self.swiftrecon.expirer_check(instance)
+        self.assertTrue(self.swiftrecon.gauge_called)
+
+        for stat in ('object_expiration_pass', 'expired_last_pass'):
+            self.assertIn(metric.format(stat), self.swiftrecon.gauge_calls)
+
+        for key in scout_content:
+            self.assertListEqual(
+                self.swiftrecon.gauge_calls[metric.format(key)],
+                [scout_content[key]])
 
     def test_auditor_check(self):
-        pass
+        instance = {'server_type': 'container', 'hostname': 'awesome.host',
+                    'port': 1234}
+
+        # test that the error case doesn't call gauge
+        for server_type in ('container', 'account'):
+            self._test_scout_error_no_gauge(self.swiftrecon.auditor_check,
+                                            instance, server_type)
+
+        # now check the correct case
+        expected_url = self.swiftrecon._build_base_url(instance)
+        scout_content_cont = {
+            "container_audits_passed": 6,
+            "container_auditor_pass_completed": 0.015977859497070312,
+            "container_audits_since": 1531714368.710222,
+            "container_audits_failed": 0}
+        scout_content_acc = {
+            "account_audits_passed": 2,
+            "account_audits_failed": 1,
+            "account_auditor_pass_completed": 7.200241088867188,
+            "account_audits_since": 1531415933.143866}
+
+        self.swiftrecon.scout_returns = [
+            (expected_url, scout_content_cont, 200),
+            (expected_url, scout_content_acc, 200)]
+
+        for server_type, content in (('container', scout_content_cont),
+                                     ('account', scout_content_acc)):
+            instance['server_type'] = server_type
+            self.swiftrecon.auditor_check(instance, server_type)
+            self.assertTrue(self.swiftrecon.gauge_called)
+
+            for key in content:
+                metric = 'swift_recon.{0}.{1}'.format(server_type, key)
+                self.assertIn(metric, self.swiftrecon.gauge_calls)
+                if key.endswith('_audits_since'):
+                    # there is a hack to make epochs dates in grafana and that
+                    # is to time it by 1000
+                    content[key] = content[key] * 1000
+                self.assertListEqual(self.swiftrecon.gauge_calls[metric],
+                                     [content[key]])
+            self.swiftrecon.reset_gauge()
 
     def test_replication_check(self):
-        pass
+        instance = {'server_type': 'object', 'hostname': 'awesome.host',
+                    'port': 1234}
+
+        # test that the error case doesn't call gauge
+        for server_type in ('object', 'container', 'account'):
+            self._test_scout_error_no_gauge(self.swiftrecon.replication_check,
+                                            instance, server_type)
+
+        # now check the correct case
+        expected_url = self.swiftrecon._build_base_url(instance)
+        scout_content_obj = {
+            "replication_last": 1531724665.483373,
+            "replication_stats": {
+                "rsync": 0, "success": 1194, "attempted": 647,
+                "remove": 0, "suffix_count": 1460, "failure": 1,
+                "hashmatch": 1194, "suffix_hash": 0, "suffix_sync": 0},
+            "object_replication_last": 1531724665.483373,
+            "replication_time": 0.11197113196055095,
+            "object_replication_time": 0.11197113196055095}
+        scout_content_cont = {
+            "replication_last": 1531724675.549912,
+            "replication_stats": {
+                "no_change": 8, "rsync": 0, "success": 8,
+                "deferred": 0, "attempted": 4, "ts_repl": 0,
+                "remove": 0, "remote_merge": 0, "diff_capped": 0,
+                "failure": 0, "hashmatch": 0, "diff": 0,
+                "start": 1531724675.488349, "empty": 0},
+            "replication_time": 0.06156301498413086}
+        scout_content_acc = {
+            "replication_last": 1531724672.644893,
+            "replication_stats": {
+                "no_change": 0, "rsync": 0, "success": 10, "deferred": 0,
+                "attempted": 7, "ts_repl": 0, "remove": 0, "remote_merge": 0,
+                "diff_capped": 0, "failure": 5, "hashmatch": 0, "diff": 0,
+                "start": 1531724672.639242, "empty": 0},
+            "replication_time": 0.005650997161865234}
+
+        self.swiftrecon.scout_returns = [
+            (expected_url, scout_content_obj, 200),
+            (expected_url, scout_content_cont, 200),
+            (expected_url, scout_content_acc, 200)]
+
+        for server_type, content in (('object', scout_content_obj),
+                                     ('container', scout_content_cont),
+                                     ('account', scout_content_acc)):
+            instance['server_type'] = server_type
+            self.swiftrecon.replication_check(instance, server_type)
+            self.assertTrue(self.swiftrecon.gauge_called)
+
+            for key in ('replication_last', 'replication_time'):
+                metric = 'swift_recon.{0}.{1}'.format(server_type, key)
+                self.assertIn(metric, self.swiftrecon.gauge_calls)
+                if key == 'replication_last':
+                    # there is a hack to make epochs dates in grafana and that
+                    # is to time it by 1000
+                    content[key] = content[key] * 1000
+                self.assertListEqual(self.swiftrecon.gauge_calls[metric],
+                                     [content[key]])
+
+            # Currently we are only grabbing the following 3 values. As you
+            # can see there are much more. Adding more should be done at some
+            # point.
+            for key in ('attempted', 'failure', 'success'):
+                metric = 'swift_recon.{0}.replication.{1}'.format(server_type,
+                                                                  key)
+                self.assertIn(metric, self.swiftrecon.gauge_calls)
+                self.assertListEqual(self.swiftrecon.gauge_calls[metric],
+                                     [content['replication_stats'][key]])
+            self.swiftrecon.reset_gauge()
